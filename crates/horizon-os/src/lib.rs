@@ -48,6 +48,11 @@ pub mod time {
     pub fn to_std(t: SystemTime) -> std::time::SystemTime {
         std::time::UNIX_EPOCH + t.duration_since(UNIX_EPOCH).unwrap_or_default()
     }
+
+    /// Convert std's `SystemTime` to this crate's (the identity on native).
+    pub fn from_std(t: std::time::SystemTime) -> SystemTime {
+        UNIX_EPOCH + t.duration_since(std::time::UNIX_EPOCH).unwrap_or_default()
+    }
 }
 
 /// std's threads. On the page, scoped threads run one after another on the

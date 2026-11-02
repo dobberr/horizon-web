@@ -18349,9 +18349,10 @@ fn gameplay_tables(
     parallel: bool,
     progress: &Progress,
 ) -> std::result::Result<GameplayTables, String> {
-    let behaviour_json: serde_json::Value = serde_json::from_reader(std::io::BufReader::new(
-        std::fs::File::open(root.join("block-behaviours.json")).map_err(|e| e.to_string())?,
-    ))
+    let behaviour_json: serde_json::Value = serde_json::from_str(
+        &horizon_os::fs::read_to_string(root.join("block-behaviours.json"))
+            .map_err(|e| e.to_string())?,
+    )
     .map_err(|e| e.to_string())?;
     let (facts, gameplay_projection) =
         BlockFacts::load_with_projection(root, assets.registry, &behaviour_json, parallel)
@@ -18396,6 +18397,11 @@ fn load_resources(
     publish: &mut dyn FnMut(UiResources, &std::path::Path),
 ) -> Result<Loaded> {
     let threads = settings.horizon.worker_threads();
+    // The page has no worker threads in the single-threaded (offline) build:
+    // scoped spawns fail there, so everything runs where it is joined.
+    #[cfg(all(target_arch = "wasm32", not(target_feature = "atomics")))]
+    let threads = 1;
+    let parallel = threads > 1;
     horizon_client::sprites::set_texture_budget(settings.horizon.texture_budget_mib);
     horizon_client::sprites::set_labpbr_maps(shader_packs::picks_native_pack(settings));
     // Stage A: the menu bundle (atlas and panorama). With a loading screen it is
@@ -18415,7 +18421,6 @@ fn load_resources(
     // bundle's core tables from the same root (`load_core`). A pack failure
     // in either starts both again with the game's own resources
     // (Minecraft.rollbackResourcePacks).
-    let parallel = threads > 1;
     let mut offer = |ui: UiResources, root: &std::path::Path| {
         if menu {
             horizon_client::telemetry::mark_ui_ready();
@@ -18430,13 +18435,9 @@ fn load_resources(
         }
     };
     let (core, loaded_gui) = loop {
-        let (ui, core) = std::thread::scope(|scope| {
-            let core = Step::spawn(scope, parallel, || {
-                load_core(&root, headless, parallel, progress)
-            });
-            let ui = load_ui(&root).map(|ui| offer(ui, &root));
-            (ui, core.join())
-        });
+        let core = load_core(&root, headless, parallel, progress)
+            .map_err(|error| error.to_string());
+        let ui = load_ui(&root).map(|ui| offer(ui, &root));
         let packs = root != vanilla_root;
         let failure = match (ui, core) {
             (Ok(gui), Ok(Ok(core))) => break (core, gui),
@@ -18499,6 +18500,7 @@ fn load_resources(
             &[&root],
             &settings.language,
         ));
+        log::error!("after Language::load");
     }
     progress.set(5);
     let resources = Resources {
@@ -19616,7 +19618,7 @@ fn missing_resources(root: &std::path::Path) -> Option<String> {
     if root.join("horizon-resources.json").fs_is_file() {
         return None;
     }
-    let shown = std::path::absolute(root).unwrap_or_else(|_| root.to_path_buf());
+    let shown = root.to_path_buf();
     Some(format!(
         "Horizon's prepared game files are missing: no horizon-resources.json in {}\n\
          Horizon is started from its launcher: download it at {} (Download). It needs your \

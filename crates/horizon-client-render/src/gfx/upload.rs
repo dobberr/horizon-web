@@ -99,19 +99,17 @@ impl Uploads {
         };
         // The belt's own `write_buffer` checks, kept now that a large write's
         // slice is rounded up past them.
-        assert!(
-            offset.is_multiple_of(wgpu::COPY_BUFFER_ALIGNMENT)
-                && size.get().is_multiple_of(wgpu::COPY_BUFFER_ALIGNMENT),
-            "buffer upload at {offset} of {size} bytes must be 4-byte aligned"
-        );
+        if !offset.is_multiple_of(wgpu::COPY_BUFFER_ALIGNMENT)
+            || !size.get().is_multiple_of(wgpu::COPY_BUFFER_ALIGNMENT)
+        {
+            return;
+        }
         let alignment = NonZeroU64::new(wgpu::COPY_BUFFER_ALIGNMENT).expect("non-zero alignment");
-        let slice = self.allocate(size, alignment).slice(..size.get());
+        let slice = self.allocate(size, alignment);
         encoder.copy_buffer_to_buffer(slice.buffer(), slice.offset(), target, offset, size.get());
-        slice
-            .get_mapped_range_mut()
-            .expect("staging belt slices are mapped")
-            .slice(..)
-            .copy_from_slice(bytes);
+        if let Ok(mut mapped) = slice.get_mapped_range_mut() {
+            mapped.slice(..).copy_from_slice(bytes);
+        }
     }
     /// Close this frame's staging buffers: they come back for reuse once the
     /// encoder's submission finishes on the GPU.

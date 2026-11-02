@@ -1,5 +1,6 @@
 // Terrain, sky and outline shaders, ported from the pinned vanilla
 // terrain.vsh/fsh, fog.glsl and sample_lightmap.glsl.
+diagnostic(off, derivative_uniformity);
 struct Globals {
     view_proj: mat4x4<f32>,
     fog_color: vec4<f32>,

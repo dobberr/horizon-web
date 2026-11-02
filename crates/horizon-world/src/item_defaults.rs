@@ -7,7 +7,8 @@
 //! are saved and sent against the changed defaults as against vanilla's.
 
 use serde_json::{Map, Value};
-use std::{collections::BTreeMap, fs, io, path::Path};
+use horizon_os::fs;
+use std::{collections::BTreeMap, io, path::Path};
 
 /// Hook point for native mods (docs/native-mods.md, listed in `native-hooks.json`
 /// with those of `horizon-client/src/game/native_hooks.rs`): `components` holds
